@@ -1,0 +1,302 @@
+---
+title: "Reproducible Research - Assignment 1"
+author: "DT"
+date: "04 August 2016"
+output: 
+  html_document: 
+    keep_md: yes
+---
+***************************************************
+```{r setup, include=FALSE, warning=FALSE, message=FALSE}
+options(width = 100)
+knitr::opts_chunk$set(echo = TRUE)
+```
+### Summary:
+
+This assignment answers a series of questions related to personal movement using small devices with built-in movement sensors. These devices generate large amounts of raw data that after processing and applying suitable statistical tools, enable us to track our physical activities. From the data recorded on these devices, we can then make adjustments to our physical activity regimens with possible improvements  in our own health, by knowing how regular we are doing our activities, and in some cases even to detect if we are doing our activities in the correct way.
+
+
+### Scope:
+As part of the Coursera assessment, the work described here is restricted to the following tasks: 
+
+*   *Loading and preprocessing the data.*
+*   *What is mean total number of steps taken per day?*
+*   *What is the average daily activity pattern?*
+*   *Inputing missing values*
+*   *Are there differences in activity patterns between weekdays and weekends?*
+*   *Write a report describing the above activities (this present document)*
+
+### Data collection:
+*This device collects data at 5 minute intervals throughout the day. The data consists of two months of data from an anonymous individual collected during the months of October and November, 2012 and include the number of steps taken in 5 minute intervals each day.The dataset is stored in a comma-separated-value (CSV) file and there are a total of 17,568 observations in this dataset.*
+
+### Report layout description:
+The format of this written report is not as rigourous as the format of a scientific report to be submitted for a specialized publication. On the other hand, it follows the guidelines on Reproductible Research:
+
+*   *Defining the question*
+*   *Defining the ideal dataset*
+*   *Determining what data you can access*
+*   *Obtaining the data*
+*   *Cleaning the data*
+*   *Exploratory data analysis*
+*   *Statistical prediction/modeling*
+*   *Interpretation of results*
+*   *Challenging of results*
+*   *Synthesis and write up*
+*   *Creating reproducible code*
+
+All the above items were considered in answering the questions detailed in the scope above.
+
+NOTE: Expressions and some sentences in *italic* or ***italic_bold*** are from references cited at the end of this report.
+
+***************************************************
+
+#### A. *Loading and preprocessing the data* 
+# 
+***A1. Load the data (i.e. read.csv())***
+
+The raw data can be downloaded, unzipped and loaded as follows:
+
+```{r, echo=TRUE, highlight=TRUE, cache=TRUE}
+#   Some assumptions: You have installed ggplot2 and dplyr packages. If not, please run: 
+#   install.packages('ggplot2'); install.packages('dplyr');
+#
+fileUrl <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip"
+download.file(fileUrl, destfile="./activity.zip")
+unzip("./activity.zip",exdir = ".")
+rawdata <- read.csv("./activity.csv")
+```
+
+#
+***A2. Process/transform the data (if necessary) into a format suitable for your analysis***
+
+Once the data is loaded as `rawdata` we can **explore the data**:
+
+```{r, echo=TRUE, highlight=TRUE}
+str(rawdata)
+```
+
+The raw data shows a data structure of a total of 17,568 observations and three variables.
+The variables are:
+
+* steps: Number of steps taking in a 5-minute interval
+* date: The date on which the measurement was recorded
+* interval: an identifier for the recorded measurement taken at 5-minute intervals
+
+The variable `date` is classified as `Factor`. We can convert it to a better format, i.e., `Date` class:
+
+```{r, echo=TRUE, highlight=TRUE}
+rawdata$date <- as.Date(rawdata$date)
+```
+
+Now let's take a look into the data
+
+```{r, echo=TRUE, highlight=TRUE}
+rawdata[10:15,]
+rawdata[287:292,] 
+```
+
+Note that the `interval`values jump from 55 to 100, and 2355 to 0 in the above example. It is like a change from 00:55 to 01:00 and 23:55 to 00:00 in 24 hour format, respectively. Now let's see an exploratory plot:
+
+```{r, echo=TRUE, highlight=TRUE,warning=FALSE, fig.height=3, fig.align='center'}
+library(ggplot2)
+qplot(data=rawdata,interval,steps,alpha=I(1/3), color=I("indianred3"))
+```
+
+The above plot shows how the total steps are distributed into intervals. Observe that the `interval` variable in the plot looks like a "bin" width of 1 hour with 288 sequential measurements with 5-minute periods. So, **each "bin" can be read as the step activity between "00:00" and "01:00", "01:00" and "02:00",...,"22:00" and "23:00", "23:00" and "24:00" per each day**.
+
+We can also summarize the `rawdata` by:
+
+```{r, echo=TRUE, highlight=TRUE}
+summary(rawdata)
+```
+
+#
+The sumarized data (see above) also shows the earliest (min) and latest (max) recorded `date` values, that is, `r min(rawdata$date)` and `r max(rawdata$date)`, respectively. We can check how many measurements were recorded during this period:
+
+```{r, echo=TRUE, highlight=TRUE}
+table(rawdata$date)
+```
+
+Therefore, there were a total of `r with(rawdata,max(date)-min(date)+1)` days with 288 measurements per day being recorded. 
+
+The summarized data above also shows that there are 2304 `NA`'s. Any missing value in the rawdata appears as "NA". Furthermore, the data structure (`str(rawdata)`) showed `NA` values in `steps`. We can calculate the number of `NA` in this variable by: 
+
+```{r, echo=TRUE, highlight=TRUE}
+sum(is.na(rawdata$steps))
+```
+
+Therefore, all of `NA` in the `rawdata` is located at variable `steps` and represents *ca.* `r round(100*( sum(is.na(rawdata))/(dim(rawdata)[1]*dim(rawdata)[2])),1)`% of the total rawdata.
+
+Finaly, we can determine which days have `NA` values:
+
+```{r, echo=TRUE, highlight=TRUE, message=FALSE}
+library(dplyr)
+noNArawdata <- filter(rawdata, is.na(steps))
+unique(noNArawdata$date)
+```
+
+Therefore, `r length(unique(noNArawdata$date))` days out of the total where no measurements were recorded or where the number of steps failed to be recorded. Since there were 288 measurements per day, this means **`r length(unique(noNArawdata$date))*288`** of `NA`s values which corresponds to the value previously found.
+
+***************************************************
+
+#### B. *What is mean total number of steps taken per day?*
+
+*For this part of the assignment, you can ignore the missing values in the dataset.*
+
+#
+***B1. Calculate the total number of steps taken per day***
+
+We can use the function `aggregated()` to obtain the total number of steps per day
+
+```{r, echo=TRUE, highlight=TRUE,message=FALSE}
+totalStepsDay <- aggregate(rawdata$steps, list(date=rawdata$date), sum)
+head(totalStepsDay)
+``` 
+
+Therefore the object `totalStepsDay` contains the total number of steps taken per day of measurment. 
+
+#
+***B2. Make a histogram of the total number of steps taken each day***
+
+To build the histogram, we need to calculate the total number of steps per day:
+
+```{r, echo=TRUE, highlight=TRUE,message=FALSE, fig.height=3, fig.align='center'}
+totalStepsDay <- aggregate(rawdata$steps, list(date=rawdata$date), sum)
+qplot(totalStepsDay$x,geom="histogram",fill = I("indianred2"), na.rm=TRUE) +labs(x="Steps")
+``` 
+
+Note `qplot` ignore the `NA`.
+
+#
+***B3. Calculate and report the mean and median total number of steps taken per day***
+
+The mean and median values for the total number of steps taken each day are:
+```{r}
+
+mean(totalStepsDay$x, na.rm = TRUE)
+median(totalStepsDay$x,na.rm = TRUE)
+```
+
+***************************************************
+
+#### C. *What is the average daily activity pattern?*
+#
+
+***C1. Make a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis).***
+
+We can obtain the average of the total number of steps measured per 5-minute intervals across all days by using `aggregate()`:
+
+```{r, echo=TRUE, highlight=TRUE,fig.height=3,fig.align='center'}
+MeanTotalStepsDay <- aggregate(rawdata$steps, list(interval=rawdata$interval), mean, na.rm=TRUE)
+colnames(MeanTotalStepsDay) <- c("Interval","Average")
+qplot(data=MeanTotalStepsDay, x=Interval, y=Average,geom="line",main="Average number of Steps across all days",ylab="Average steps", xlab="Interval Number (5-minutes)", colour=I("steelblue"))
+``` 
+
+
+#
+***C2. Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?***
+
+To determine the interval, we have to obtain the maximum value for the average steps across all days in meanStepDate:
+
+```{r, echo=TRUE, highlight=TRUE}
+maxim <- filter(MeanTotalStepsDay, Average==max(MeanTotalStepsDay$Average))
+maxim
+```
+
+So, the maximum average activity acrross all days happens around `r maxim$Interval` or `r maxim$Interval%/%100`:`r maxim$Interval%%100`min.  
+ 
+***************************************************
+
+#### D. *Inputing missing values*
+*Note that there are a number of days/intervals where there are missing values (coded as `NA`). The presence of missing days may introduce bias into some calculations or summaries of the data.*
+#
+
+***D1. Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with `NA`s)***
+
+This was already established before in the data exploratory. The total number of rows with `NA`s is **`r sum(is.na(rawdata$steps))`**, all located at the `steps` variable (column) of `rawdata`.
+
+#
+***D2. Devise a strategy for filling in all of the missing values in the dataset. The strategy does not need to be sophisticated. For example, you could use the mean/median for that day, or the mean for that 5-minute interval, etc.***
+
+We will replace `NA`s by the average number of steps across all days, that is, using the profile figure shown in Section C1 on the days where `NA`s appear.
+
+#
+***D3. Create a new dataset that is equal to the original dataset but with the missing data filled in.***
+
+We can split the `rawdata` into a list of data subset per Date with `split()` function. Then, we can replace those days where `NA` appears in all the intervals by the average number of steps across all days (`MeanTotalStepsDay$Average`), and finally recreating the original data frame but now with the replaced `NA`s values. See below:
+
+```{r, echo=TRUE, highlight=TRUE}
+srawdata <- split(rawdata, rawdata$date)
+for (i in 1:length(srawdata)) {
+    if (unique(srawdata[[i]]$date) %in% unique(noNArawdata$date)) {
+            srawdata[[i]]$steps<-MeanTotalStepsDay$Average}}
+newRawdata <- unsplit(srawdata, rawdata$date)
+str(newRawdata)
+```                            
+
+#
+***D4. Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day. Do these values differ from the estimates from the first part of the assignment? What is the impact of inputing missing data on the estimates of the total daily number of steps?***
+
+The histogram can be obtained by:
+
+```{r, echo=TRUE, highlight=TRUE,message=FALSE, fig.height=3, fig.align='center'}
+tempdata <- aggregate(newRawdata$steps, list(date=newRawdata$date), sum)
+qplot(tempdata$x,geom="histogram",fill = I("steelblue"), na.rm=TRUE) +labs(x="Steps")
+```
+
+The mean and median values of total number of steps taken per day with the `NA` replacement values (calculated in D3 above) are:
+
+```{r}
+mean(tempdata$x)
+median(tempdata$x)
+```
+
+The mean value is the same as that for `rawdata` while the median value is slightly different.
+The impact of replacing the missing data is small by the replacement of `NA` values per the average value of 5-minute intervals. This was already expected from the exploratory data where we estimated that the percentage of `NA` was small (around 4.4%).
+
+The median value was the parameter that slightly differed after `NA` replacement. The most likely reason being the inclusion of additional steps, also observed in the increase of the overall area of the histogram for the total number of steps. Therefore, it is to be expected that the median increases towards the region near to the mean.
+
+***************************************************
+
+#### E. *Are there differences in activity patterns between weekdays and weekends?*
+*For this part the `weekdays()` function may be of some help here. Use the dataset with the filled-in missing values for this part.*
+
+#
+***E1. Create a new factor variable in the dataset with two levels -- "weekday" and "weekend" indicating whether a given date is a weekday or weekend day.***
+
+First we define `weekend` days as "Saturday","Sunday", then using `mutate()` from `dplyr` package we create a new variable (initially logical) `dayType` with the day of respective `date` defined as being weekend or not. Then we redefine the `dayType` as "weekday" or "weekend". See below:
+
+```{r, echo=TRUE, highlight=TRUE,message=FALSE}
+weekend <- c("Saturday","Sunday")
+newdata <- mutate(newRawdata, dayType = weekdays(date)%in%weekend)
+newdata$dayType <- factor(newdata$dayType, labels = c("weekday", "weekend"))
+```
+
+#
+***E2. Make a panel plot containing a time series plot (i.e. `type = "l"`) of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis)***
+
+with the `newdata`:
+
+```{r, echo=TRUE, highlight=TRUE,message=FALSE, fig.align='center'}
+ggplot(newdata, aes(interval,steps))+facet_wrap(~dayType, ncol=1)+ stat_summary(fun.y = mean, geom="line", colour = "steelblue")+labs(y="Average steps", x="Interval")+geom_hline(yintercept = 120, colour="red")+geom_vline(xintercept = 530, colour="green")+geom_vline(xintercept = 900, colour="green")
+```
+
+We observe that the average steps on weekdays is higher than on weekends between the 530 and 900 intervals (or 5:30 to 9:00). After 900 (9:00), the weekdays activity is, on average, lower than on weekends. The activity pattern in the last period is expected if we assume that on weekdays the individual is working and that the work has low physical activity when compared to activity on weekend days. At weekend, it is expected that the physical activity is low for early hours, or before 9:00.
+
+The average steps on days of the week across all the measured days, can be also obtained by:
+
+```{r, echo=TRUE, highlight=TRUE,message=FALSE, fig.height=3, fig.align='center'}
+newdata1 <- mutate(newRawdata, dayType = weekdays(date))
+tempdata1 <- aggregate(newdata1$steps,list(dayType=newdata1$dayType), mean)
+qplot(data=tempdata1, x=dayType,weight=x,geom="bar", fill = dayType)+geom_hline(yintercept = mean(tempdata1$x), colour="red")
+```
+x$name <- factor(x$name, levels = x$name[order(x$val)])
+
+The horizontal red line is the total average value across all days. Except for "Wednesdays" and "Fridays", the weekdays' activity is on average smaller than weekend days. The weekend days ("Saturdays" and "Sundays") show the highest values, meaning that there is more activity at the weekend. This agrees with the previous results.
+
+***************************************************
+## References:
+
+*   [GitHub repository created for this assignment](http://github.com/rdpeng/RepData_PeerAssessment1)
+
+*   [Report Writing for Data Science in R](https://leanpub.com/reportwriting?utm_source=coursera&utm_medium=syllabus&utm_campaign=CourseraSyllabus)
